@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/sidebar";
 
 // React hook
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 // uuid
 import { v4 as uuidv4 } from "uuid";
@@ -33,9 +33,32 @@ import { Card } from "@/components/ui/card";  // Shadcn UI の Card コンポー
 
 export default function Home() {
   const [todos, setTodos] = useState([]);
-
+  const [isLoading, setIsLoading] = useState(true);
   const todoNameRef = useRef();
-  const todoDateRef = useRef(); // 日付入力用の ref を追加
+  const todoDateRef = useRef();
+
+  // 初期データの読み込み
+  useEffect(() => {
+    try {
+      const savedTodos = localStorage.getItem("todos");
+      if (savedTodos) {
+        setTodos(JSON.parse(savedTodos));
+      }
+    } catch (error) {
+      console.error("ローカルストレージからの読み込みに失敗しました:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // タスクが更新されるたびにローカルストレージに保存
+  useEffect(() => {
+    try {
+      localStorage.setItem("todos", JSON.stringify(todos));
+    } catch (error) {
+      console.error("ローカルストレージへの保存に失敗しました:", error);
+    }
+  }, [todos]);
 
   const getCurrentDate = () => {
     const now = new Date();
@@ -78,6 +101,10 @@ export default function Home() {
     const newTodos = todos.filter((todo) => !todo.completed);
     setTodos(newTodos);
   };
+
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-screen">読み込み中...</div>;
+  }
 
   return (
     <div className="w-full max-w-screen-lg mx-auto p-4">
