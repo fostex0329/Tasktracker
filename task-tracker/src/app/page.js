@@ -32,12 +32,11 @@ import { Input } from "@/components/ui/input";  // Shadcn UI の Input コンポ
 import { Card } from "@/components/ui/card";  // Shadcn UI の Card コンポーネントをインポート
 
 export default function Home() {
-  const [todos, setTodos] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const todoNameRef = useRef();
-  const todoDateRef = useRef();
+  const [todos, setTodos] = useState([]);  // タスク一覧を管理
+  const [isLoading, setIsLoading] = useState(true);  // ローディング状態を管理
+  const todoNameRef = useRef();  // 入力フィールドへの参照
 
-  // 初期データの読み込み
+  // ローカルストレージからの読み込み
   useEffect(() => {
     try {
       const savedTodos = localStorage.getItem("todos");
@@ -51,7 +50,7 @@ export default function Home() {
     }
   }, []);
 
-  // タスクが更新されるたびにローカルストレージに保存
+  // ローカルストレージへの保存
   useEffect(() => {
     try {
       localStorage.setItem("todos", JSON.stringify(todos));
@@ -60,34 +59,24 @@ export default function Home() {
     }
   }, [todos]);
 
-  const getCurrentDate = () => {
-    const now = new Date();
-    const year = now.getFullYear().toString().slice(2); // YY
-    const month = (now.getMonth() + 1).toString().padStart(2, "0"); // MM
-    const day = now.getDate().toString().padStart(2, "0"); // DD
-    return `${year}${month}${day}`;
-  };
+  //タスク追加処理
+  const handleAddTodo = async () => {
+    const name = todoNameRef.current.value; // 入力フィールドから値を取得
+    if (name === "") return; // 空の場合は処理を中断
 
-  const getCurrentTime = () => {
-    const now = new Date();
-    const hours = now.getHours().toString().padStart(2, "0"); // HH
-    const minutes = now.getMinutes().toString().padStart(2, "0"); // MM
-    return `${hours}:${minutes}`;
-  };
-
-  const handleAddTodo = () => {
-    const name = todoNameRef.current.value;
-    const date = todoDateRef.current.value;
-    if (name === "") return;
-    const timestamp = getCurrentDate() + " " + getCurrentTime(); // 現在の日付と時間を組み合わせる
-    setTodos((prevTodos) => {
-      return [
-        ...prevTodos,
-        { id: uuidv4(), name: `${name} ${timestamp}`, completed: false, date: date },
-      ];
-    });
-    todoNameRef.current.value = null;
-    todoDateRef.current.value = ""; // 入力フィールドをクリア
+    try {
+      // API呼び出し
+      const response = await fetch("/api/create", {
+        method: "POST", // HTTPメソッドをPOSTに指定
+        headers: { "Content-Type": "application/json" },  // JSONデータを送信することを明示
+        body: JSON.stringify({ name }), // オブジェクトをJSON文字列に変換
+      });
+      const addedTask = await response.json(); // レスポンスをJSONとして解析
+      setTodos(prevTodos => [...prevTodos, addedTask]); // 状態を更新（前のタスク一覧に新しいタスクを追加）
+      todoNameRef.current.value = null; // 入力フィールドをクリア
+    } catch (error) {
+      console.error("タスクの追加に失敗しました:", error);
+    }
   };
 
   const toggleTodo = (id) => {
@@ -118,12 +107,6 @@ export default function Home() {
             ref={todoNameRef} 
             placeholder="タスク名を入力" 
             className="w-full" 
-          />
-          <Input
-            ref={todoDateRef}
-            type="text"
-            placeholder={getCurrentTime()} // プレースホルダーに現在の時刻（HH:MM）を設定
-            className="w-full placeholder-white" // プレースホルダーの色を白色に変更
           />
           <Button type="submit" className="font-bold">タスクを追加</Button>
         </form>
