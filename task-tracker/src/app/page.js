@@ -35,6 +35,7 @@ export default function Home() {
   const [todos, setTodos] = useState([]);  // タスク一覧を管理
   const [isLoading, setIsLoading] = useState(true);  // ローディング状態を管理
   const todoNameRef = useRef();  // 入力フィールドへの参照
+  const remindAtRef = useRef();  // リマインド日時入力フィールドへの参照
 
   // ローカルストレージからの読み込み
   useEffect(() => {
@@ -62,6 +63,7 @@ export default function Home() {
   //タスク追加処理
   const handleAddTodo = async () => {
     const name = todoNameRef.current.value; // 入力フィールドから値を取得
+    const remindAt = remindAtRef.current.value; // リマインド日時を取得
     if (name === "") return; // 空の場合は処理を中断
 
     try {
@@ -69,13 +71,22 @@ export default function Home() {
       const response = await fetch("/api/create", {
         method: "POST", // HTTPメソッドをPOSTに指定
         headers: { "Content-Type": "application/json" },  // JSONデータを送信することを明示
-        body: JSON.stringify({ name }), // オブジェクトをJSON文字列に変換
+        body: JSON.stringify({ name, remindAt: remindAt || null }), // オブジェクトをJSON文字列に変換
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        alert(errorData.error || "タスクの追加に失敗しました");
+        return;
+      }
+      
       const addedTask = await response.json(); // レスポンスをJSONとして解析
       setTodos(prevTodos => [...prevTodos, addedTask]); // 状態を更新（前のタスク一覧に新しいタスクを追加）
-      todoNameRef.current.value = null; // 入力フィールドをクリア
+      todoNameRef.current.value = ""; // 入力フィールドをクリア
+      remindAtRef.current.value = ""; // リマインド日時フィールドをクリア
     } catch (error) {
       console.error("タスクの追加に失敗しました:", error);
+      alert("タスクの追加に失敗しました");
     }
   };
 
@@ -103,11 +114,19 @@ export default function Home() {
         <TodoList todos={todos} toggleTodo={toggleTodo} />
         
         <form onSubmit={(e) => { e.preventDefault(); handleAddTodo(); }} className="space-y-4">
-          <Input 
-            ref={todoNameRef} 
-            placeholder="タスク名を入力" 
-            className="w-full" 
-          />
+          <div className="space-y-2">
+            <Input 
+              ref={todoNameRef} 
+              placeholder="タスク名を入力" 
+              className="w-full" 
+            />
+            <Input 
+              ref={remindAtRef} 
+              type="datetime-local"
+              placeholder="リマインド日時（任意）" 
+              className="w-full" 
+            />
+          </div>
           <Button type="submit" className="font-bold">タスクを追加</Button>
         </form>
         
