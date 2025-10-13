@@ -12,6 +12,7 @@ import SectionCard from "@/components/SectionCard";
 import DayCard from "@/components/schedule/DayCard";
 import TaskRow from "@/components/schedule/TaskRow";
 import { CheckCircle, Circle } from "lucide-react";
+import { getNotificationPermission, requestNotificationPermission as reqNotifPerm, scheduleTaskReminders } from "@/lib/notification";
 
 // =============================
 // Constants
@@ -64,8 +65,12 @@ function groupByDate(items) {
 export default function Home() {
   const [todos, setTodos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [notifPermission, setNotifPermission] = useState(
+    typeof window !== "undefined" ? getNotificationPermission() : "default"
+  );
   const todoNameRef = useRef(null);
   const remindAtRef = useRef(null);
+  const reminderControllerRef = useRef(null);
 
   const stats = useMemo(() => {
     const total = todos.length;
@@ -99,6 +104,30 @@ export default function Home() {
     }
   }, [todos]);
 
+  // 通知権限の最新状態を同期
+  useEffect(() => {
+    setNotifPermission(getNotificationPermission());
+  }, []);
+
+  // リマインドのスケジューリング
+  useEffect(() => {
+    reminderControllerRef.current?.clear?.();
+    reminderControllerRef.current = scheduleTaskReminders(todos, (title, body) => {
+      try { alert(`${title} (リマインド: ${body})`); } catch (_) {}
+    });
+    return () => { reminderControllerRef.current?.clear?.(); };
+  }, [todos]);
+
+  const requestNotificationPermission = async () => {
+    const result = await reqNotifPerm();
+    setNotifPermission(result);
+    if (result === "unsupported") {
+      alert("このブラウザは通知に対応していません");
+    } else if (result !== "granted") {
+      alert("通知を有効化できませんでした");
+    }
+  };
+
   const handleAddTodo = async () => {
     const name = todoNameRef.current?.value?.trim();
     const remindAt = remindAtRef.current?.value || null;
@@ -122,6 +151,25 @@ export default function Home() {
     }
   };
 
+  const handleDeleteTodo = async (id) => {
+    try {
+      const response = await fetch("/api/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        alert(errorData.error || "タスクの削除に失敗しました");
+        return;
+      }
+      setTodos((prev) => prev.filter((t) => t.id !== id));
+    } catch (error) {
+      console.error("タスクの削除に失敗しました:", error);
+      alert("タスクの削除に失敗しました");
+    }
+  };
+
   const toggleTodo = (id) => {
     setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
   };
@@ -140,6 +188,11 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={() => todoNameRef.current?.focus()}>新規タスク</Button>
             <Button size="sm" variant="outline" onClick={handleClear}>完了タスク削除</Button>
+            {typeof Notification !== "undefined" && notifPermission !== "granted" ? (
+              <Button size="sm" variant="secondary" onClick={requestNotificationPermission}>
+                通知を有効化
+              </Button>
+            ) : null}
           </div>
         </div>
       </header>
@@ -215,7 +268,7 @@ export default function Home() {
               <ul className="grid gap-2.5">
                 {todos.map((t) => (
                   <li key={t.id} className="rounded-lg bg-transparent py-2 transition-colors">
-                    <TaskRowWithDate task={t} onToggle={() => toggleTodo(t.id)} />
+                    <TaskRowWithDate task={t} onToggle={() => toggleTodo(t.id)} onDelete={() => handleDeleteTodo(t.id)} />
                   </li>
                 ))}
               </ul>
@@ -253,7 +306,7 @@ export default function Home() {
 // =============================
 // Presentational bits (小物はここに）
 // =============================
-function TaskRowWithDate({ task, onToggle }) {
+function TaskRowWithDate({ task, onToggle, onDelete }) {
   const completed = !!task.completed;
   const hasRemind = !!task.remindAt;
   const timeLabel = hasRemind ? formatTime(task.remindAt) : null;
@@ -283,7 +336,19 @@ function TaskRowWithDate({ task, onToggle }) {
           <div className={`text-xs mt-1 ${isOverdue ? 'text-destructive' : 'text-muted-foreground'}`}>{secondaryLabel}</div>
         ) : null}
       </div>
-      {task.link ? <span className="ml-2 text-sm text-muted-foreground" aria-hidden="true">↗︎</span> : null}
+      <div className="flex items-center gap-2 ml-2">
+        {task.link ? <span className="text-sm text-muted-foreground" aria-hidden="true">↗︎</span> : null}
+        {typeof onDelete === "function" ? (
+          <button
+            type="button"
+            className="text-xs px-2 py-1 rounded border border-border text-muted-foreground hover:bg-muted"
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            aria-label="タスクを削除"
+          >
+            削除
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
