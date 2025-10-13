@@ -1,89 +1,121 @@
+// src/app/page.js
 "use client";
 
-import Image from "next/image";
+// =============================
+// Imports
+// =============================
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { AppSidebar } from "@/components/app-sidebar";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import SectionCard from "@/components/SectionCard";
+import DayCard from "@/components/schedule/DayCard";
+import TaskRow from "@/components/schedule/TaskRow";
+import { CheckCircle, Circle } from "lucide-react";
 
-// React hook
-import { useState, useRef, useEffect } from "react";
+// =============================
+// Constants
+// =============================
+const STORAGE_KEY = "todos";
 
-// uuid
-import { v4 as uuidv4 } from "uuid";
+// =============================
+// Date / Grouping Utilities
+// =============================
+function parseISO(v) { if (!v) return new Date(NaN); return new Date(v); }
+function isValidDate(d) { return d instanceof Date && !Number.isNaN(d.getTime()); }
+function formatISODate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+function formatJPYearMonth(ym) { const [, m] = ym.split("-"); return `${Number(m)}月`; }
+function formatTime(isoLike) { const d = parseISO(isoLike); if (!isValidDate(d)) return null; const hh = String(d.getHours()).padStart(2, "0"); const mm = String(d.getMinutes()).padStart(2, "0"); return `${hh}:${mm}`; }
+function formatDateJP(iso) { const d = parseISO(iso); if (!isValidDate(d)) return null; return `${d.getMonth() + 1}/${d.getDate()}`; }
+function isSameYMD(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+function isTodayISO(iso) { const d = parseISO(iso); if (!isValidDate(d)) return false; return isSameYMD(d, new Date()); }
+function isPastISO(iso) { const d = parseISO(iso); if (!isValidDate(d)) return false; return d.getTime() < Date.now(); }
+function groupByMonth(items) {
+  const map = new Map();
+  for (const t of items) {
+    const d = parseISO(t.remindAt);
+    if (!isValidDate(d)) continue;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(t);
+  }
+  return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+}
+function groupByDate(items) {
+  const map = new Map();
+  for (const t of items) {
+    const d = parseISO(t.remindAt);
+    if (!isValidDate(d)) continue;
+    const key = formatISODate(d);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(t);
+  }
+  return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+}
 
-// 自作コンポーネント
-import TaskList from "@/components/ui/tasklist";
-import TodoList from "@/components/TodoList";
-import Todo from "@/components/Todo";
-import { Input } from "@/components/ui/input";  // Shadcn UI の Input コンポーネントをインポート
-import { Card } from "@/components/ui/card";  // Shadcn UI の Card コンポーネントをインポート
-
+// =============================
+// Page Component
+// =============================
 export default function Home() {
-  const [todos, setTodos] = useState([]);  // タスク一覧を管理
-  const [isLoading, setIsLoading] = useState(true);  // ローディング状態を管理
-  const todoNameRef = useRef();  // 入力フィールドへの参照
-  const remindAtRef = useRef();  // リマインド日時入力フィールドへの参照
+  const [todos, setTodos] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const todoNameRef = useRef(null);
+  const remindAtRef = useRef(null);
 
-  // ローカルストレージからの読み込み
+  const stats = useMemo(() => {
+    const total = todos.length;
+    const completed = todos.filter((t) => t.completed).length;
+    const remaining = total - completed;
+    const rate = total === 0 ? 0 : Math.round((completed / total) * 100);
+    return { total, completed, remaining, rate };
+  }, [todos]);
+
+  const drafts = useMemo(() => todos.filter((t) => !t.remindAt), [todos]);
+  const scheduled = useMemo(() => todos.filter((t) => !!t.remindAt), [todos]);
+  const scheduledByMonth = useMemo(() => groupByMonth(scheduled), [scheduled]);
+  const todayKey = useMemo(() => formatISODate(new Date()), []);
+
   useEffect(() => {
     try {
-      const savedTodos = localStorage.getItem("todos");
-      if (savedTodos) {
-        setTodos(JSON.parse(savedTodos));
-      }
-    } catch (error) {
-      console.error("ローカルストレージからの読み込みに失敗しました:", error);
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) setTodos(JSON.parse(saved));
+    } catch (err) {
+      console.error("ローカルストレージからの読み込みに失敗しました:", err);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // ローカルストレージへの保存
   useEffect(() => {
     try {
-      localStorage.setItem("todos", JSON.stringify(todos));
-    } catch (error) {
-      console.error("ローカルストレージへの保存に失敗しました:", error);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
+    } catch (err) {
+      console.error("ローカルストレージへの保存に失敗しました:", err);
     }
   }, [todos]);
 
-  //タスク追加処理
   const handleAddTodo = async () => {
-    const name = todoNameRef.current.value; // 入力フィールドから値を取得
-    const remindAt = remindAtRef.current.value; // リマインド日時を取得
-    if (name === "") return; // 空の場合は処理を中断
-
+    const name = todoNameRef.current?.value?.trim();
+    const remindAt = remindAtRef.current?.value || null;
+    if (!name) return;
     try {
-      // API呼び出し
       const response = await fetch("/api/create", {
-        method: "POST", // HTTPメソッドをPOSTに指定
-        headers: { "Content-Type": "application/json" },  // JSONデータを送信することを明示
-        body: JSON.stringify({ name, remindAt: remindAt || null }), // オブジェクトをJSON文字列に変換
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, remindAt }),
       });
-      
       if (!response.ok) {
         const errorData = await response.json();
         alert(errorData.error || "タスクの追加に失敗しました");
         return;
       }
-      
-      const addedTask = await response.json(); // レスポンスをJSONとして解析
-      setTodos(prevTodos => [...prevTodos, addedTask]); // 状態を更新（前のタスク一覧に新しいタスクを追加）
-      todoNameRef.current.value = ""; // 入力フィールドをクリア
-      remindAtRef.current.value = ""; // リマインド日時フィールドをクリア
+      const addedTask = await response.json();
+      setTodos((prev) => [...prev, addedTask]);
+      if (todoNameRef.current) todoNameRef.current.value = "";
+      if (remindAtRef.current) remindAtRef.current.value = "";
     } catch (error) {
       console.error("タスクの追加に失敗しました:", error);
       alert("タスクの追加に失敗しました");
@@ -91,48 +123,202 @@ export default function Home() {
   };
 
   const toggleTodo = (id) => {
-    const newTodos = [...todos];
-    const todo = newTodos.find((todo) => todo.id === id);
-    todo.completed = !todo.completed;
-    setTodos(newTodos);
+    setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
   };
-
-  const handleClear = () => {
-    const newTodos = todos.filter((todo) => !todo.completed);
-    setTodos(newTodos);
-  };
+  const handleClear = () => { setTodos((prev) => prev.filter((t) => !t.completed)); };
 
   if (isLoading) {
-    return <div className="flex justify-center items-center h-screen">読み込み中...</div>;
+    return <div className="flex justify-center items-center h-screen text-muted-foreground">読み込み中...</div>;
   }
 
   return (
-    <div className="w-full max-w-screen-lg mx-auto p-4">
-      {/* Shadcn UI の Card コンポーネント */}
-      <Card className="p-4 space-y-4">
-        {/* コンポーネント群を Card 内に表示 */}
-        <TodoList todos={todos} toggleTodo={toggleTodo} />
-        
-        <form onSubmit={(e) => { e.preventDefault(); handleAddTodo(); }} className="space-y-4">
-          <div className="space-y-2">
-            <Input 
-              ref={todoNameRef} 
-              placeholder="タスク名を入力" 
-              className="w-full" 
-            />
-            <Input 
-              ref={remindAtRef} 
-              type="datetime-local"
-              placeholder="リマインド日時（任意）" 
-              className="w-full" 
-            />
+    <div className="min-h-dvh bg-background text-foreground">
+      {/* Header */}
+      <header className="sticky top-0 z-10 border-b bg-card/60 backdrop-blur">
+        <div className="mx-auto max-w-[1200px] px-6 h-16 flex items-center justify-between">
+          <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Tasktracker</h1>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => todoNameRef.current?.focus()}>新規タスク</Button>
+            <Button size="sm" variant="outline" onClick={handleClear}>完了タスク削除</Button>
           </div>
-          <Button type="submit" className="font-bold">タスクを追加</Button>
-        </form>
-        
-        <button onClick={handleClear}>完了したタスクの削除</button>
-        <div>残りのタスク{todos.filter((todo) => !todo.completed).length}</div>
-      </Card>
+        </div>
+      </header>
+
+      {/* Page container: sidebar + content */}
+      <main className="mx-auto max-w-[1200px] px-6 py-8 grid gap-8 grid-cols-1 lg:grid-cols-[320px_1fr]">
+        {/* LEFT COLUMN */}
+        <aside className="grid gap-4 self-start lg:sticky lg:top-24">
+          <SectionCard title="DRAFT">
+            {drafts.length === 0 ? (
+              <EmptyRow label="ドラフトはありません" />
+            ) : (
+              <ul className="grid gap-2.5 pl-4">
+                {drafts.map((t) => (
+                  <TaskRow key={t.id} task={t} onToggle={() => toggleTodo(t.id)} />
+                ))}
+              </ul>
+            )}
+          </SectionCard>
+
+          <SectionCard title="SCHEDULED" collapsible>
+            {scheduledByMonth.length === 0 ? (
+              <EmptyRow label="予定されたタスクはありません" />
+            ) : (
+              <div className="grid gap-6">
+                {scheduledByMonth.map(([ym, list]) => (
+                  <div key={ym} className="grid gap-6">
+                    <MonthSeparator ym={ym} />
+                    {groupByDate(list).map(([dateKey, dayList]) => (
+                      <DayCard key={dateKey} dateKey={dateKey} todayKey={todayKey}>
+                        {[...dayList]
+                          .sort((a, b) => {
+                            const da = parseISO(a.remindAt);
+                            const db = parseISO(b.remindAt);
+                            const ta = isValidDate(da) ? da.getTime() : Number.POSITIVE_INFINITY;
+                            const tb = isValidDate(db) ? db.getTime() : Number.POSITIVE_INFINITY;
+                            return ta - tb; // 早い時刻が上に
+                          })
+                          .map((t) => (
+                            <li key={t.id}>
+                              <div
+                                className="rounded-lg bg-transparent py-2 transition-colors"
+                                style={dateKey === todayKey ? { "--background": "214 32% 91%" } : undefined}
+                              >
+                                <TaskRow task={t} onToggle={() => toggleTodo(t.id)} />
+                              </div>
+                            </li>
+                          ))}
+                      </DayCard>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+        </aside>
+
+        {/* RIGHT CONTENT */}
+        <div className="grid gap-8">
+          {/* Summary cards */}
+          <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+            <SummaryCard label="今日の達成" value={`${stats.completed}/${stats.total}`} rate={stats.rate} />
+            <SummaryCard label="残タスク" value={`${stats.remaining} 件`} />
+            <SummaryCard label="達成率" value={`${stats.rate}%`} rate={stats.rate} />
+          </section>
+
+          {/* Todo list (full list) — 絵文字なしで時刻表示 */}
+          <section className="grid gap-4">
+            <Card className="p-5 shadow-md">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-semibold tracking-tight">タスクリスト</h2>
+              </div>
+              <ul className="grid gap-2.5">
+                {todos.map((t) => (
+                  <li key={t.id} className="rounded-lg bg-transparent py-2 transition-colors">
+                    <TaskRowWithDate task={t} onToggle={() => toggleTodo(t.id)} />
+                  </li>
+                ))}
+              </ul>
+            </Card>
+
+            {/* Add form */}
+            <Card className="p-5 shadow-md">
+              <form
+                onSubmit={(e) => { e.preventDefault(); handleAddTodo(); }}
+                className="grid gap-5"
+              >
+                <div className="grid gap-3 sm:grid-cols-[1fr_260px] items-start">
+                  <div className="grid gap-1">
+                    <label htmlFor="todoTitle" className="sr-only">タスク名</label>
+                    <Input id="todoTitle" ref={todoNameRef} placeholder="タスク名を入力" className="w-full" />
+                  </div>
+                  <div className="grid gap-1">
+                    <label htmlFor="remindAt" className="sr-only">リマインド日時（任意）</label>
+                    <Input id="remindAt" ref={remindAtRef} type="datetime-local" placeholder="リマインド日時（任意）" className="w-full" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button type="submit" className="font-semibold">タスクを追加</Button>
+                  <span className="text-sm text-muted-foreground">未完了: {stats.remaining} 件</span>
+                </div>
+              </form>
+            </Card>
+          </section>
+        </div>
+      </main>
     </div>
   );
-};
+}
+
+// =============================
+// Presentational bits (小物はここに）
+// =============================
+function TaskRowWithDate({ task, onToggle }) {
+  const completed = !!task.completed;
+  const hasRemind = !!task.remindAt;
+  const timeLabel = hasRemind ? formatTime(task.remindAt) : null;
+  const isToday = hasRemind ? isTodayISO(task.remindAt) : false;
+  const isOverdue = hasRemind ? isPastISO(task.remindAt) && !completed : false;
+  const dateLabel = hasRemind ? (isToday ? "今日" : formatDateJP(task.remindAt)) : null;
+  const secondaryLabel = timeLabel ? (dateLabel ? `${dateLabel} ${timeLabel}` : timeLabel) : null;
+
+  return (
+    <div
+      role="checkbox"
+      aria-checked={completed}
+      aria-labelledby={`task-title-${task.id}`}
+      tabIndex={0}
+      onClick={onToggle}
+      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); onToggle?.(); } }}
+      className="flex items-start gap-3 rounded-md cursor-pointer select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    >
+      {completed ? (
+        <CheckCircle aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" strokeWidth={2.5} />
+      ) : (
+        <Circle aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-foreground/60" strokeWidth={2.5} />
+      )}
+      <div className="min-w-0 flex-1">
+        <div id={`task-title-${task.id}`} className={`truncate text-[15px] ${completed ? 'font-bold text-emerald-600 line-through decoration-emerald-600/80 decoration-[1.5px]' : 'font-medium'}`}>{task.name}</div>
+        {secondaryLabel ? (
+          <div className={`text-xs mt-1 ${isOverdue ? 'text-destructive' : 'text-muted-foreground'}`}>{secondaryLabel}</div>
+        ) : null}
+      </div>
+      {task.link ? <span className="ml-2 text-sm text-muted-foreground" aria-hidden="true">↗︎</span> : null}
+    </div>
+  );
+}
+function SummaryCard({ label, value, rate }) {
+  const now = Math.min(Math.max(typeof rate === "number" ? rate : 0, 0), 100);
+  return (
+    <Card className="p-5 shadow-md">
+      <div className="text-sm text-muted-foreground mb-3">{label}</div>
+      <div className="text-3xl font-bold tracking-tight">{value}</div>
+      {typeof rate === "number" ? (
+        <div className="mt-4">
+          <div
+            className="h-2 w-full rounded-full bg-muted/70 overflow-hidden"
+            role="progressbar"
+            aria-label={`${label}の進捗`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={now}
+          >
+            <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${now}%` }} />
+          </div>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function EmptyRow({ label }) { return <div className="text-xs text-muted-foreground px-1 py-1">{label}</div>; }
+function MonthSeparator({ ym }) {
+  const label = formatJPYearMonth(ym);
+  return (
+    <div className="flex items-center gap-3 px-1 text-xs text-muted-foreground" aria-hidden="true">
+      <div className="flex-1 h-px bg-border" />
+      <div className="shrink-0 font-semibold tracking-wide">{label}</div>
+      <div className="flex-1 h-px bg-border" />
+    </div>
+  );
+}
