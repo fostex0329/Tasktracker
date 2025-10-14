@@ -11,7 +11,7 @@ import { Card } from "@/components/ui/card";
 import SectionCard from "@/components/SectionCard";
 import DayCard from "@/components/schedule/DayCard";
 import TaskRow from "@/components/schedule/TaskRow";
-import { CheckCircle, Circle } from "lucide-react";
+import { CheckCircle, Circle, Pencil } from "lucide-react";
 import { getNotificationPermission, requestNotificationPermission as reqNotifPerm, scheduleTaskReminders } from "@/lib/notification";
 
 // =============================
@@ -117,6 +117,28 @@ export default function Home() {
     });
     return () => { reminderControllerRef.current?.clear?.(); };
   }, [todos]);
+
+  const handleEditTodo = async (id, payload) => {
+    try {
+      const response = await fetch("/api/edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...payload }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        alert(errorData.error || "タスクの更新に失敗しました");
+        return false;
+      }
+      const updated = await response.json();
+      setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, ...updated } : t)));
+      return true;
+    } catch (error) {
+      console.error("タスクの更新に失敗しました:", error);
+      alert("タスクの更新に失敗しました");
+      return false;
+    }
+  };
 
   const requestNotificationPermission = async () => {
     const result = await reqNotifPerm();
@@ -268,7 +290,12 @@ export default function Home() {
               <ul className="grid gap-2.5">
                 {todos.map((t) => (
                   <li key={t.id} className="rounded-lg bg-transparent py-2 transition-colors">
-                    <TaskRowWithDate task={t} onToggle={() => toggleTodo(t.id)} onDelete={() => handleDeleteTodo(t.id)} />
+                    <TaskRowWithDate
+                      task={t}
+                      onToggle={() => toggleTodo(t.id)}
+                      onDelete={() => handleDeleteTodo(t.id)}
+                      onEdit={(payload) => handleEditTodo(t.id, payload)}
+                    />
                   </li>
                 ))}
               </ul>
@@ -306,7 +333,7 @@ export default function Home() {
 // =============================
 // Presentational bits (小物はここに）
 // =============================
-function TaskRowWithDate({ task, onToggle, onDelete }) {
+function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
   const completed = !!task.completed;
   const hasRemind = !!task.remindAt;
   const timeLabel = hasRemind ? formatTime(task.remindAt) : null;
@@ -314,6 +341,19 @@ function TaskRowWithDate({ task, onToggle, onDelete }) {
   const isOverdue = hasRemind ? isPastISO(task.remindAt) && !completed : false;
   const dateLabel = hasRemind ? (isToday ? "今日" : formatDateJP(task.remindAt)) : null;
   const secondaryLabel = timeLabel ? (dateLabel ? `${dateLabel} ${timeLabel}` : timeLabel) : null;
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(task.name || "");
+  const [editRemindAt, setEditRemindAt] = useState(task.remindAt ? task.remindAt.slice(0, 16) : "");
+
+  const submitEdit = async () => {
+    if (!onEdit) { setIsEditing(false); return; }
+    const payload = {};
+    if (editName !== task.name) payload.name = editName.trim();
+    if (editRemindAt !== (task.remindAt ? task.remindAt.slice(0, 16) : "")) payload.remindAt = editRemindAt || null;
+    const ok = await onEdit(payload);
+    if (ok) setIsEditing(false);
+  };
 
   return (
     <div
@@ -331,13 +371,50 @@ function TaskRowWithDate({ task, onToggle, onDelete }) {
         <Circle aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-foreground/60" strokeWidth={2.5} />
       )}
       <div className="min-w-0 flex-1">
-        <div id={`task-title-${task.id}`} className={`truncate text-[15px] ${completed ? 'font-bold text-emerald-600 line-through decoration-emerald-600/80 decoration-[1.5px]' : 'font-medium'}`}>{task.name}</div>
-        {secondaryLabel ? (
-          <div className={`text-xs mt-1 ${isOverdue ? 'text-destructive' : 'text-muted-foreground'}`}>{secondaryLabel}</div>
-        ) : null}
+        {isEditing ? (
+          <div className="grid gap-2">
+            <Input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="タスク名"
+              className="h-8"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <div className="grid gap-2 sm:grid-cols-[220px_auto] items-center">
+              <Input
+                type="datetime-local"
+                value={editRemindAt}
+                onChange={(e) => setEditRemindAt(e.target.value)}
+                className="h-8"
+                onClick={(e) => e.stopPropagation()}
+              />
+              <div className="flex items-center gap-2">
+                <Button size="sm" onClick={(e) => { e.stopPropagation(); submitEdit(); }}>保存</Button>
+                <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setIsEditing(false); setEditName(task.name || ""); setEditRemindAt(task.remindAt ? task.remindAt.slice(0, 16) : ""); }}>キャンセル</Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div id={`task-title-${task.id}`} className={`truncate text-[15px] ${completed ? 'font-bold text-emerald-600 line-through decoration-emerald-600/80 decoration-[1.5px]' : 'font-medium'}`}>{task.name}</div>
+            {secondaryLabel ? (
+              <div className={`text-xs mt-1 ${isOverdue ? 'text-destructive' : 'text-muted-foreground'}`}>{secondaryLabel}</div>
+            ) : null}
+          </>
+        )}
       </div>
       <div className="flex items-center gap-2 ml-2">
         {task.link ? <span className="text-sm text-muted-foreground" aria-hidden="true">↗︎</span> : null}
+        {typeof onEdit === "function" && !isEditing ? (
+          <button
+            type="button"
+            className="h-7 w-7 inline-flex items-center justify-center rounded border border-border text-muted-foreground hover:bg-muted"
+            onClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
+            aria-label="タスクを編集"
+          >
+            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        ) : null}
         {typeof onDelete === "function" ? (
           <button
             type="button"
