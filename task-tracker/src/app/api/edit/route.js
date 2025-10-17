@@ -19,6 +19,8 @@ export async function POST(request) {
       if (rawRemindAt === null || rawRemindAt === "") {
         remindAt = null; // 解除
       } else {
+        // 正規化: クライアントからは ISO も "YYYY-MM-DDTHH:mm" も来る可能性があるため、
+        // どちらも Date で受けて ISO(UTC) に統一して返す。
         const dt = new Date(rawRemindAt);
         if (Number.isNaN(dt.getTime())) {
           return Response.json({ error: "無効な日時です" }, { status: 400 });
@@ -37,5 +39,3 @@ export async function POST(request) {
     );
   }
 }
-
-
