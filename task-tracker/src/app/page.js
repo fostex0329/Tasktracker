@@ -59,6 +59,40 @@ function groupByDate(items) {
   return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 }
 
+// ---- Timezone-safe helpers ----
+// 'YYYY-MM-DDTHH:mm' (datetime-local) -> ISO(UTC)
+function localDatetimeToISO(local) {
+  if (!local) return null;
+  const d = new Date(local); // interpret as local time in the browser
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+// ISO -> 'YYYY-MM-DDTHH:mm' in user's local time (for <input type="datetime-local" />)
+function isoToLocalDatetime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  const y = d.getFullYear();
+  const m = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const mm = pad(d.getMinutes());
+  return `${y}-${m}-${day}T${hh}:${mm}`;
+}
+// migrate old todos that kept 'YYYY-MM-DDTHH:mm' (no TZ) into ISO once
+function migrateTodosToISO(list) {
+  const localRe = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/; // no timezone
+  return Array.isArray(list)
+    ? list.map((t) => {
+        if (t?.remindAt && typeof t.remindAt === "string" && localRe.test(t.remindAt)) {
+          const iso = localDatetimeToISO(t.remindAt);
+          return { ...t, remindAt: iso };
+        }
+        return t;
+      })
+    : list;
+}
+
 // =============================
 // Page Component
 // =============================
@@ -88,7 +122,14 @@ export default function Home() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) setTodos(JSON.parse(saved));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const migrated = migrateTodosToISO(parsed);
+        setTodos(migrated);
+        if (JSON.stringify(parsed) !== JSON.stringify(migrated)) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+        }
+      }
     } catch (err) {
       console.error("ローカルストレージからの読み込みに失敗しました:", err);
     } finally {
@@ -152,7 +193,8 @@ export default function Home() {
 
   const handleAddTodo = async () => {
     const name = todoNameRef.current?.value?.trim();
-    const remindAt = remindAtRef.current?.value || null;
+    const rawRemind = remindAtRef.current?.value || null; // 'YYYY-MM-DDTHH:mm'
+    const remindAt = rawRemind ? localDatetimeToISO(rawRemind) : null; // ISO(UTC)
     if (!name) return;
     try {
       const response = await fetch("/api/create", {
@@ -344,13 +386,14 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(task.name || "");
-  const [editRemindAt, setEditRemindAt] = useState(task.remindAt ? task.remindAt.slice(0, 16) : "");
+  const [editRemindAt, setEditRemindAt] = useState(task.remindAt ? isoToLocalDatetime(task.remindAt) : "");
 
   const submitEdit = async () => {
     if (!onEdit) { setIsEditing(false); return; }
     const payload = {};
     if (editName !== task.name) payload.name = editName.trim();
-    if (editRemindAt !== (task.remindAt ? task.remindAt.slice(0, 16) : "")) payload.remindAt = editRemindAt || null;
+    const baseline = task.remindAt ? isoToLocalDatetime(task.remindAt) : "";
+    if (editRemindAt !== baseline) payload.remindAt = editRemindAt ? localDatetimeToISO(editRemindAt) : null;
     const ok = await onEdit(payload);
     if (ok) setIsEditing(false);
   };
@@ -390,7 +433,7 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
               />
               <div className="flex items-center gap-2">
                 <Button size="sm" onClick={(e) => { e.stopPropagation(); submitEdit(); }}>保存</Button>
-                <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setIsEditing(false); setEditName(task.name || ""); setEditRemindAt(task.remindAt ? task.remindAt.slice(0, 16) : ""); }}>キャンセル</Button>
+                <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setIsEditing(false); setEditName(task.name || ""); setEditRemindAt(task.remindAt ? isoToLocalDatetime(task.remindAt) : ""); }}>キャンセル</Button>
               </div>
             </div>
           </div>
