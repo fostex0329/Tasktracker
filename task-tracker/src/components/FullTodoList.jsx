@@ -9,7 +9,7 @@ export default function FullTodoList({ todos, toggleTodo }) {
   return (
     <ul className="grid gap-2">
       {todos.map((t) => (
-        <li key={t.id} className="rounded-lg bg-card py-2 shadow-sm hover:bg-accent/50 transition-colors">
+        <li key={t.id} className="rounded-lg bg-card shadow-sm hover:bg-accent/50 transition-colors">
           <TaskRow task={t} onToggle={() => toggleTodo?.(t.id)} />
         </li>
       ))}

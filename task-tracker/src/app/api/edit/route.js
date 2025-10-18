@@ -1,10 +1,13 @@
 // タスク編集API
+const MAX_NOTE_LENGTH = 280;
+
 export async function POST(request) {
   try {
     const data = await request.json();
     const id = data?.id;
     const name = typeof data?.name === "string" ? data.name.trim() : undefined;
     const rawRemindAt = data?.remindAt ?? undefined; // null を明示的に許容
+    const rawNote = data?.note ?? undefined;
 
     if (!id || typeof id !== "string") {
       return Response.json({ error: "無効なIDです" }, { status: 400 });
@@ -30,8 +33,28 @@ export async function POST(request) {
       }
     }
 
+    let note = undefined;
+    if (rawNote !== undefined) {
+      if (rawNote === null) {
+        note = null;
+      } else if (typeof rawNote === "string") {
+        const trimmedNote = rawNote.trim();
+        if (trimmedNote.length > MAX_NOTE_LENGTH) {
+          return Response.json({ error: `メモは${MAX_NOTE_LENGTH}文字以内で入力してください` }, { status: 400 });
+        }
+        note = trimmedNote.length > 0 ? trimmedNote : null;
+      } else {
+        return Response.json({ error: "メモは文字列で指定してください" }, { status: 400 });
+      }
+    }
+
     // サンプル実装: 永続層は持たないため、正規化したフィールドを返すのみ。
-    return Response.json({ id, ...(name !== undefined ? { name } : {}), ...(rawRemindAt !== undefined ? { remindAt } : {}) });
+    return Response.json({
+      id,
+      ...(name !== undefined ? { name } : {}),
+      ...(rawRemindAt !== undefined ? { remindAt } : {}),
+      ...(rawNote !== undefined ? { note } : {}),
+    });
   } catch (error) {
     return Response.json(
       { error: "サーバーエラーが発生しました" },

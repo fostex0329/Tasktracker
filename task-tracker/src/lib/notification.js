@@ -35,7 +35,7 @@ export function scheduleTaskReminders(todos, onNotify) {
   };
 
   for (const t of todos) {
-    if (!t?.remindAt || t.completed) continue;
+    if (!t?.remindAt || t.completed || t.remindHasTime === false) continue;
     const when = new Date(t.remindAt).getTime();
     if (!Number.isFinite(when) || when <= now) continue;
     const delay = Math.min(when - now, 2 ** 31 - 1);
@@ -51,5 +51,4 @@ export function scheduleTaskReminders(todos, onNotify) {
 
   return { clear };
 }
-
 
