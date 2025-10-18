@@ -4,7 +4,9 @@
 // =============================
 // Imports
 // =============================
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -17,6 +19,8 @@ import TaskRow from "@/components/schedule/TaskRow";
 import { CheckCircle, Circle, Pencil, X, CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getNotificationPermission, requestNotificationPermission as reqNotifPerm, scheduleTaskReminders } from "@/lib/notification";
+import { sortTodos } from "@/lib/sort-todos";
+import iconLogo from "@/app/icon-logo.svg";
 
 // =============================
 // Constants
@@ -131,6 +135,12 @@ function migrateTodosToISO(list) {
 // =============================
 export default function Home() {
   const [todos, setTodos] = useState([]);
+  const updateTodos = useCallback((updater) => {
+    setTodos((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      return sortTodos(next);
+    });
+  }, []);
   const [isLoading, setIsLoading] = useState(true);
   const [notifPermission, setNotifPermission] = useState(
     typeof window !== "undefined" ? getNotificationPermission() : "default"
@@ -175,7 +185,7 @@ export default function Home() {
       if (saved) {
         const parsed = JSON.parse(saved);
         const migrated = migrateTodosToISO(parsed);
-        setTodos(migrated);
+        updateTodos(migrated);
         if (JSON.stringify(parsed) !== JSON.stringify(migrated)) {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
         }
@@ -185,7 +195,7 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [updateTodos]);
 
   useEffect(() => {
     const now = new Date();
@@ -232,7 +242,7 @@ export default function Home() {
         return false;
       }
       const updated = await response.json();
-      setTodos((prev) =>
+      updateTodos((prev) =>
         prev.map((t) => {
           if (t.id !== id) return t;
           const next = { ...t, ...updated };
@@ -332,7 +342,7 @@ export default function Home() {
       if (annotatedTask.note === null || annotatedTask.note === undefined) {
         delete annotatedTask.note;
       }
-      setTodos((prev) => [...prev, annotatedTask]);
+      updateTodos((prev) => [...prev, annotatedTask]);
       if (todoNameRef.current) todoNameRef.current.value = "";
       if (noteRef.current) noteRef.current.value = "";
       resetScheduleInputs();
@@ -354,7 +364,7 @@ export default function Home() {
         alert(errorData.error || "タスクの削除に失敗しました");
         return;
       }
-      setTodos((prev) => prev.filter((t) => t.id !== id));
+      updateTodos((prev) => prev.filter((t) => t.id !== id));
     } catch (error) {
       console.error("タスクの削除に失敗しました:", error);
       alert("タスクの削除に失敗しました");
@@ -362,9 +372,9 @@ export default function Home() {
   };
 
   const toggleTodo = (id) => {
-    setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
+    updateTodos((prev) => prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
   };
-  const handleClear = () => { setTodos((prev) => prev.filter((t) => !t.completed)); };
+  const handleClear = () => { updateTodos((prev) => prev.filter((t) => !t.completed)); };
 
   if (isLoading) {
     return <div className="flex justify-center items-center h-screen text-muted-foreground">読み込み中...</div>;
@@ -374,8 +384,15 @@ export default function Home() {
     <div className="min-h-dvh bg-background text-foreground">
       {/* Header */}
       <header className="sticky top-0 z-10 border-b bg-card/60 backdrop-blur">
-        <div className="mx-auto max-w-[1200px] px-4 sm:px-6 h-16 flex items-center justify-between min-w-0">
-          <h1 className="text-lg sm:text-xl font-semibold tracking-tight truncate">YOHAKU</h1>
+        <div className="mx-auto max-w-[1200px] px-4 sm:px-6 h-20 flex items-center justify-between min-w-0">
+          <Link href="/" className="flex items-center" aria-label="YOHAKU">
+            <Image
+              src={iconLogo}
+              alt=""
+              priority
+              className="h-9 w-auto"
+            />
+          </Link>
           <div className="flex items-center gap-1 sm:gap-2 min-w-0">
             <Button size="sm" onClick={() => todoNameRef.current?.focus()} className="hidden sm:inline-flex">新規タスク</Button>
             <Button size="sm" variant="outline" onClick={handleClear} className="text-xs sm:text-sm">完了削除</Button>
@@ -398,13 +415,14 @@ export default function Home() {
             ) : (
               <ul className="grid gap-2.5 pl-4 min-w-0">
                 {drafts.map((t) => (
-                          <TaskRow
-                    key={t.id} 
-                    task={t} 
-                    onToggle={() => toggleTodo(t.id)}
-                    onEdit={() => handleEditTodo(t.id, {})}
-                    onDelete={() => handleDeleteTodo(t.id)}
-                  />
+                  <li key={t.id} className="min-w-0 w-full">
+                    <TaskRow
+                      task={t}
+                      onToggle={() => toggleTodo(t.id)}
+                      onEdit={() => handleEditTodo(t.id, {})}
+                      onDelete={() => handleDeleteTodo(t.id)}
+                    />
+                  </li>
                 ))}
               </ul>
             )}
@@ -485,9 +503,29 @@ export default function Home() {
             <Card className="p-4 sm:p-5 shadow-md min-w-0">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold tracking-tight">タスクリスト</h2>
-              </div>
-              <ul className="grid gap-2.5 min-w-0">
-                {todos.map((t) => (
+             </div>
+             <ul className="grid gap-2.5 min-w-0">
+                {todos
+                  .slice()
+                  .sort((a, b) => {
+                    const aHasDate = !!a.remindAt;
+                    const bHasDate = !!b.remindAt;
+                    if (aHasDate !== bHasDate) {
+                      return aHasDate ? 1 : -1;
+                    }
+                    if (!aHasDate && !bHasDate) {
+                      return 0;
+                    }
+                    const aHasTime = a.remindHasTime !== false && formatTime(a.remindAt) !== null;
+                    const bHasTime = b.remindHasTime !== false && formatTime(b.remindAt) !== null;
+                    if (aHasTime !== bHasTime) {
+                      return aHasTime ? 1 : -1;
+                    }
+                    const aTime = new Date(a.remindAt).getTime();
+                    const bTime = new Date(b.remindAt).getTime();
+                    return aTime - bTime;
+                  })
+                  .map((t) => (
                   <li key={t.id} className="rounded-lg bg-transparent transition-colors min-w-0">
                     <TaskRowWithDate
                       task={t}
@@ -662,11 +700,12 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
     completed ? "text-emerald-600" : isOverdue ? "text-destructive" : "text-foreground"
   );
 
-  const titleClassName = `truncate text-[15px] ${
+  const baseTitleClass = `text-[15px] ${
     completed
       ? "font-bold text-emerald-600 line-through decoration-emerald-600/80 decoration-[1.5px]"
       : `font-semibold${isOverdue ? " text-destructive" : ""}`
   }`;
+  const titleClassName = `truncate ${baseTitleClass}`;
 
   return (
     <div
@@ -675,20 +714,27 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
       aria-labelledby={`task-title-${task.id}`}
       tabIndex={0}
       onClick={onToggle}
-      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); onToggle?.(); } }}
-      className="group flex flex-col gap-1 rounded-md cursor-pointer select-none px-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background min-w-0 hover:bg-muted/50 transition-colors"
+      onKeyDown={(e) => {
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault();
+          onToggle?.();
+        }
+      }}
+      className="group flex w-full max-w-full cursor-pointer select-none flex-col gap-1 overflow-hidden rounded-md px-3 py-2 transition-colors hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
-      <div className={`flex gap-3 ${isEditing ? "items-start" : "items-center"}`}>
-        {completed ? (
-          <CheckCircle aria-hidden="true" className={iconClassName} strokeWidth={2} />
-        ) : (
-          <Circle aria-hidden="true" className={iconClassName} strokeWidth={2} />
-        )}
-        <div className="min-w-0 flex-1 overflow-hidden">
-          {isEditing ? (
-            <div className="grid gap-3">
-              <Input
-                value={editName}
+      <div className="flex w-full items-center gap-2">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center">
+          {completed ? (
+            <CheckCircle aria-hidden="true" className={iconClassName} strokeWidth={2} />
+          ) : (
+            <Circle aria-hidden="true" className={iconClassName} strokeWidth={2} />
+          )}
+        </div>
+          <div className="flex-1 min-w-0">
+            {isEditing ? (
+              <div className="grid gap-3">
+                <Input
+                  value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 placeholder="タスク名"
                 className="h-8"
@@ -699,10 +745,10 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
                 onChange={(e) => setEditNote(e.target.value)}
                 maxLength={NOTE_MAX_LENGTH}
                 placeholder={`メモ（任意・最大${NOTE_MAX_LENGTH}文字）`}
-                className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background min-h-[64px]"
+                className="min-h-[64px] w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
                 onClick={(e) => e.stopPropagation()}
               />
-              <div className="grid gap-2 sm:grid-cols-[220px_auto] items-center">
+              <div className="grid items-center gap-2 sm:grid-cols-[220px_auto]">
                 <Input
                   type="datetime-local"
                   value={editRemindAt}
@@ -728,17 +774,19 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
                 </div>
               </div>
             </div>
-          ) : (
-            <div
-              id={`task-title-${task.id}`}
-              className={titleClassName}
-              title={task.name}
-            >
+            ) : (
+            <div id={`task-title-${task.id}`} className={`${baseTitleClass} break-words`} title={task.name}>
               {task.name}
             </div>
           )}
         </div>
-        <div className="flex items-center gap-1 ml-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        <div
+          className={`flex items-center gap-1 shrink-0 transition-opacity duration-200 ${
+            isEditing
+              ? "opacity-100"
+              : "opacity-0 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+          }`}
+        >
           {task.link ? <span className="text-sm text-muted-foreground" aria-hidden="true">↗︎</span> : null}
           {typeof onEdit === "function" && !isEditing ? (
             <button
@@ -759,7 +807,7 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
           {typeof onDelete === "function" ? (
             <button
               type="button"
-              className="h-8 w-8 inline-flex items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground shrink-0"
+              className="h-8 w-8 inline-flex items-center justify-center rounded text-red-400 hover:bg-red-400/10 hover:text-red-400 focus-visible:ring-2 focus-visible:ring-red-400/40 shrink-0"
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
               aria-label="タスクを削除"
             >
@@ -769,10 +817,10 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
         </div>
       </div>
       {hasNote ? (
-        <div className="pl-8 text-sm text-muted-foreground/90 whitespace-pre-wrap break-words">{noteText}</div>
+        <div className="pl-10 whitespace-pre-wrap break-words text-sm text-muted-foreground/90">{noteText}</div>
       ) : null}
       {!isEditing && secondaryLabel ? (
-        <div className={`pl-8 text-xs truncate ${isOverdue ? "text-destructive" : "text-muted-foreground"}`}>{secondaryLabel}</div>
+        <div className={`pl-10 text-xs truncate ${isOverdue ? "text-destructive" : "text-muted-foreground"}`}>{secondaryLabel}</div>
       ) : null}
     </div>
   );

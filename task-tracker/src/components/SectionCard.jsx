@@ -11,7 +11,9 @@ export default function SectionCard({ title, children, collapsible }) {
         </h2>
         {collapsible ? <div className="text-muted-foreground" aria-hidden="true">▾</div> : null}
       </div>
-      <div className="grid gap-2 px-4">{children}</div>
+      <div className="grid gap-2 px-4">
+        <div className="min-w-0 w-full">{children}</div>
+      </div>
     </Card>
   );
 }
