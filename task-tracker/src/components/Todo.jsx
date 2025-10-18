@@ -25,24 +25,30 @@ const Todo = ({ todo, toggleTodo }) => {
     const labelTone = isCompleted ? "line-through text-gray-500" : "text-foreground";
 
     return (
-        <div className="flex items-start space-x-2 p-2 border rounded-lg">
-            <Checkbox 
-                checked={todo.completed} 
-                onCheckedChange={handleTodoClick} 
-                className={cn(
-                    "mt-1 h-5 w-5 border border-current text-current",
-                    "data-[state=checked]:bg-transparent data-[state=checked]:text-current",
-                    checkboxTone
-                )} // テキストと同じ色と太さに揃える
-            />
-            <div className="flex-1">
-                <span className={labelTone}>{todo.name}</span>
-                {todo.remindAt && (
-                    <div className="text-sm text-gray-500 mt-1">
-                        📅 リマインド: {formatRemindAt(todo.remindAt)}
-                    </div>
-                )}
+        <div className="group flex w-full max-w-full flex-col gap-1 overflow-hidden rounded-lg border p-3 transition-colors hover:bg-muted/40">
+            <div className="flex w-full items-center gap-2">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center">
+                    <Checkbox
+                        checked={todo.completed}
+                        onCheckedChange={handleTodoClick}
+                        className={cn(
+                            "h-5 w-5 border border-current text-current",
+                            "data-[state=checked]:bg-transparent data-[state=checked]:text-current",
+                            checkboxTone
+                        )} // テキストと同じ色と太さに揃える
+                    />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <span className={cn("block min-w-0 break-words text-[15px]", labelTone)} title={todo.name}>
+                        {todo.name}
+                    </span>
+                </div>
             </div>
+            {todo.remindAt && (
+                <div className="pl-10 text-sm text-gray-500">
+                    📅 リマインド: {formatRemindAt(todo.remindAt)}
+                </div>
+            )}
         </div>
     );
 };
