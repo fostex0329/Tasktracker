@@ -25,7 +25,7 @@ const Todo = ({ todo, toggleTodo }) => {
     const labelTone = isCompleted ? "line-through text-gray-500" : "text-foreground";
 
     return (
-        <div className="group flex w-full max-w-full flex-col gap-1 overflow-hidden rounded-lg border p-3 transition-colors hover:bg-muted/40">
+        <div className="group flex w-full max-w-full flex-col gap-1 rounded-lg border p-3 transition-colors hover:bg-muted/40">
             <div className="flex w-full items-center gap-2">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center">
                     <Checkbox
@@ -38,17 +38,17 @@ const Todo = ({ todo, toggleTodo }) => {
                         )} // テキストと同じ色と太さに揃える
                     />
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0 flex-1">
                     <span className={cn("block min-w-0 break-words text-[15px]", labelTone)} title={todo.name}>
                         {todo.name}
                     </span>
                 </div>
             </div>
-            {todo.remindAt && (
+            {todo.remindAt ? (
                 <div className="pl-10 text-sm text-gray-500">
                     📅 リマインド: {formatRemindAt(todo.remindAt)}
                 </div>
-            )}
+            ) : null}
         </div>
     );
 };

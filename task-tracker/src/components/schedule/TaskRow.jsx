@@ -35,8 +35,8 @@ function formatTime(iso){
   * 行全体をclick/Space/Enterでトグル可能なチェック行（AX対応）
   * props: { task: {id, name, completed, remindAt?, link?}, onToggle: () => void, onEdit?: () => void, onDelete?: () => void }
   */
- export default function TaskRow({ task, onToggle, onEdit, onDelete }) {
-   const completed = !!task.completed;
+export default function TaskRow({ task, onToggle, onEdit, onDelete }) {
+  const completed = !!task.completed;
   const hasRemind = !!task.remindAt;
   const hasExplicitTime = hasRemind && task.remindHasTime !== false;
   const timeLabel = hasExplicitTime ? formatTime(task.remindAt) : null;
@@ -47,46 +47,49 @@ function formatTime(iso){
   const [isPeekOpen, setIsPeekOpen] = useState(false);
 
   const isToday = hasRemind ? isTodayISO(task.remindAt) : false;
-   const isOverdue = hasRemind
-     ? (() => {
-         if (!hasExplicitTime && isToday) return false;
-         return isPastISO(task.remindAt) && !completed;
-       })()
-     : false;
- 
-   const handleKeyDown = useCallback((e) => {
-     if (e.key === " " || e.key === "Enter") {
-       e.preventDefault();
-       onToggle?.();
-     }
-   }, [onToggle]);
- 
-   useEffect(() => {
-     const handler = (e) => {
-       if (e?.detail?.id !== rowId) {
-         setIsPeekOpen(false);
-       }
-     };
-     window.addEventListener("task-note-peek", handler);
-     return () => window.removeEventListener("task-note-peek", handler);
-   }, [rowId]);
- 
-   const togglePeek = (state) => {
-     const nextState = typeof state === "boolean" ? state : !isPeekOpen;
-     if (nextState) {
-       window.dispatchEvent(new CustomEvent("task-note-peek", { detail: { id: rowId } }));
-     }
-     setIsPeekOpen(nextState);
-   };
- 
-   const notePreview = hasNote ? noteText : "";
- 
-   const iconClassName = cn(
-     "h-5 w-5 shrink-0",
-     completed ? "text-emerald-600" : isOverdue ? "text-destructive" : "text-foreground/60"
-   );
- 
-   return (
+  const isOverdue = hasRemind
+    ? (() => {
+        if (!hasExplicitTime && isToday) return false;
+        return isPastISO(task.remindAt) && !completed;
+      })()
+    : false;
+
+  const handleKeyDown = useCallback(
+    (e) => {
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        onToggle?.();
+      }
+    },
+    [onToggle]
+  );
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e?.detail?.id !== rowId) {
+        setIsPeekOpen(false);
+      }
+    };
+    window.addEventListener("task-note-peek", handler);
+    return () => window.removeEventListener("task-note-peek", handler);
+  }, [rowId]);
+
+  const togglePeek = (state) => {
+    const nextState = typeof state === "boolean" ? state : !isPeekOpen;
+    if (nextState) {
+      window.dispatchEvent(new CustomEvent("task-note-peek", { detail: { id: rowId } }));
+    }
+    setIsPeekOpen(nextState);
+  };
+
+  const notePreview = hasNote ? noteText : "";
+
+  const iconClassName = cn(
+    "h-5 w-5 shrink-0",
+    completed ? "text-emerald-600" : isOverdue ? "text-destructive" : "text-foreground/60"
+  );
+
+  return (
     <Collapsible open={isPeekOpen} onOpenChange={(next) => togglePeek(next)} className="w-full max-w-full">
       <div
         role="checkbox"
@@ -108,11 +111,11 @@ function formatTime(iso){
           <div className="min-w-0 flex-1">
             <div
               id={titleId}
-              className={`truncate text-[15px] ${
+              className={`text-[15px] ${
                 completed
                   ? "font-bold text-emerald-600 line-through decoration-emerald-600/80 decoration-[1.5px]"
                   : `font-semibold ${isOverdue ? "text-destructive" : "text-foreground"}`
-              }`}
+              } truncate`}
               title={task.name}
             >
               {task.name}
@@ -146,7 +149,10 @@ function formatTime(iso){
               <button
                 type="button"
                 className="h-8 w-8 inline-flex items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground shrink-0"
-                onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
                 aria-label="タスクを編集"
               >
                 <Pencil className="h-4 w-4" aria-hidden="true" />
@@ -156,7 +162,10 @@ function formatTime(iso){
               <button
                 type="button"
                 className="h-8 w-8 inline-flex items-center justify-center rounded text-red-400 hover:bg-red-400/10 hover:text-red-400 focus-visible:ring-2 focus-visible:ring-red-400/40 shrink-0"
-                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
                 aria-label="タスクを削除"
               >
                 <X className="h-4 w-4" aria-hidden="true" />

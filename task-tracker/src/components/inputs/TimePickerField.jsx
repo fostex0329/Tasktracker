@@ -7,7 +7,17 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { TimePicker } from "@mui/x-date-pickers/TimePicker";
 
 const TimePickerField = forwardRef(function TimePickerField(
-  { value, onChange, disabled = false, placeholder = "時刻を選択", minutesStep = 5, className = "", inputId },
+  {
+    value,
+    onChange,
+    disabled = false,
+    placeholder = "時刻を選択",
+    minutesStep = 5,
+    className = "",
+    inputId,
+    onFocus,
+    onOpen,
+  },
   ref
 ) {
   const parsed = useMemo(() => {
@@ -22,6 +32,7 @@ const TimePickerField = forwardRef(function TimePickerField(
         ref={ref}
         ampm={false}
         value={parsed}
+        onOpen={onOpen}
         onChange={(newValue) => {
           if (!onChange) return;
           if (!newValue || !newValue.isValid()) {
@@ -39,7 +50,15 @@ const TimePickerField = forwardRef(function TimePickerField(
             size: "small",
             className,
             id: inputId,
-            inputProps: { "aria-label": placeholder, id: inputId },
+            inputProps: {
+              "aria-label": placeholder,
+              id: inputId,
+              onFocus: (event) => {
+                if (typeof onFocus === "function") {
+                  onFocus(event);
+                }
+              },
+            },
             sx: {
               "& .MuiOutlinedInput-root": {
                 height: 40,
