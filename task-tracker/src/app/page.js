@@ -5,8 +5,6 @@
 // Imports
 // =============================
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import Image from "next/image";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -20,7 +18,6 @@ import { CheckCircle, Circle, Pencil, X, CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getNotificationPermission, requestNotificationPermission as reqNotifPerm, scheduleTaskReminders } from "@/lib/notification";
 import { sortTodos } from "@/lib/sort-todos";
-import iconLogo from "@/app/icon-logo.svg";
 
 // =============================
 // Constants
@@ -100,6 +97,17 @@ function isoToLocalDatetime(iso) {
   const mm = pad(d.getMinutes());
   return `${y}-${m}-${day}T${hh}:${mm}`;
 }
+function getNearestFutureTime(stepMinutes = 5) {
+  const now = new Date();
+  const minutes = now.getMinutes();
+  const remainder = minutes % stepMinutes;
+  if (remainder !== 0) {
+    now.setMinutes(minutes + (stepMinutes - remainder));
+  }
+  now.setSeconds(0, 0);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
 // migrate old todos that kept 'YYYY-MM-DDTHH:mm' (no TZ) into ISO once
 function migrateTodosToISO(list) {
   const localRe = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/; // no timezone
@@ -151,6 +159,15 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState("");
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const ensureDefaultTime = useCallback(() => {
+    if (!selectedDate) return;
+    setSelectedTime((prev) => {
+      if (typeof prev === "string" && prev.trim().length > 0) {
+        return prev;
+      }
+      return getNearestFutureTime(5);
+    });
+  }, [selectedDate]);
 
   const stats = useMemo(() => {
     const total = todos.length;
@@ -195,7 +212,7 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, [updateTodos]);
+  }, []);
 
   useEffect(() => {
     const now = new Date();
@@ -374,7 +391,9 @@ export default function Home() {
   const toggleTodo = (id) => {
     updateTodos((prev) => prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
   };
-  const handleClear = () => { updateTodos((prev) => prev.filter((t) => !t.completed)); };
+  const handleClear = () => {
+    updateTodos((prev) => prev.filter((t) => !t.completed));
+  };
 
   if (isLoading) {
     return <div className="flex justify-center items-center h-screen text-muted-foreground">読み込み中...</div>;
@@ -384,15 +403,8 @@ export default function Home() {
     <div className="min-h-dvh bg-background text-foreground">
       {/* Header */}
       <header className="sticky top-0 z-10 border-b bg-card/60 backdrop-blur">
-        <div className="mx-auto max-w-[1200px] px-4 sm:px-6 h-20 flex items-center justify-between min-w-0">
-          <Link href="/" className="flex items-center" aria-label="YOHAKU">
-            <Image
-              src={iconLogo}
-              alt=""
-              priority
-              className="h-9 w-auto"
-            />
-          </Link>
+        <div className="mx-auto max-w-[1200px] px-4 sm:px-6 h-16 flex items-center justify-between min-w-0">
+          <h1 className="text-lg sm:text-xl font-semibold tracking-tight truncate">YOHAKU</h1>
           <div className="flex items-center gap-1 sm:gap-2 min-w-0">
             <Button size="sm" onClick={() => todoNameRef.current?.focus()} className="hidden sm:inline-flex">新規タスク</Button>
             <Button size="sm" variant="outline" onClick={handleClear} className="text-xs sm:text-sm">完了削除</Button>
@@ -413,9 +425,9 @@ export default function Home() {
             {drafts.length === 0 ? (
               <EmptyRow label="Inboxはありません" />
             ) : (
-              <ul className="grid gap-2.5 pl-4 min-w-0">
+              <ul className="grid w-full gap-2.5 pl-4 min-w-0">
                 {drafts.map((t) => (
-                  <li key={t.id} className="min-w-0 w-full">
+                  <li key={t.id} className="min-w-0 w-full overflow-hidden">
                     <TaskRow
                       task={t}
                       onToggle={() => toggleTodo(t.id)}
@@ -503,29 +515,9 @@ export default function Home() {
             <Card className="p-4 sm:p-5 shadow-md min-w-0">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold tracking-tight">タスクリスト</h2>
-             </div>
-             <ul className="grid gap-2.5 min-w-0">
-                {todos
-                  .slice()
-                  .sort((a, b) => {
-                    const aHasDate = !!a.remindAt;
-                    const bHasDate = !!b.remindAt;
-                    if (aHasDate !== bHasDate) {
-                      return aHasDate ? 1 : -1;
-                    }
-                    if (!aHasDate && !bHasDate) {
-                      return 0;
-                    }
-                    const aHasTime = a.remindHasTime !== false && formatTime(a.remindAt) !== null;
-                    const bHasTime = b.remindHasTime !== false && formatTime(b.remindAt) !== null;
-                    if (aHasTime !== bHasTime) {
-                      return aHasTime ? 1 : -1;
-                    }
-                    const aTime = new Date(a.remindAt).getTime();
-                    const bTime = new Date(b.remindAt).getTime();
-                    return aTime - bTime;
-                  })
-                  .map((t) => (
+              </div>
+              <ul className="grid gap-2.5 min-w-0">
+                {todos.map((t) => (
                   <li key={t.id} className="rounded-lg bg-transparent transition-colors min-w-0">
                     <TaskRowWithDate
                       task={t}
@@ -609,6 +601,8 @@ export default function Home() {
                         value={selectedTime}
                         onChange={setSelectedTime}
                         disabled={!selectedDate}
+                        onFocus={ensureDefaultTime}
+                        onOpen={ensureDefaultTime}
                         className="h-10"
                         placeholder="時刻を選択"
                         minutesStep={5}
@@ -705,7 +699,6 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
       ? "font-bold text-emerald-600 line-through decoration-emerald-600/80 decoration-[1.5px]"
       : `font-semibold${isOverdue ? " text-destructive" : ""}`
   }`;
-  const titleClassName = `truncate ${baseTitleClass}`;
 
   return (
     <div
@@ -730,11 +723,11 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
             <Circle aria-hidden="true" className={iconClassName} strokeWidth={2} />
           )}
         </div>
-          <div className="flex-1 min-w-0">
-            {isEditing ? (
-              <div className="grid gap-3">
-                <Input
-                  value={editName}
+        <div className="min-w-0 flex-1">
+          {isEditing ? (
+            <div className="grid gap-3">
+              <Input
+                value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 placeholder="タスク名"
                 className="h-8"
@@ -745,10 +738,10 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
                 onChange={(e) => setEditNote(e.target.value)}
                 maxLength={NOTE_MAX_LENGTH}
                 placeholder={`メモ（任意・最大${NOTE_MAX_LENGTH}文字）`}
-                className="min-h-[64px] w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+                className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background min-h-[64px]"
                 onClick={(e) => e.stopPropagation()}
               />
-              <div className="grid items-center gap-2 sm:grid-cols-[220px_auto]">
+              <div className="grid gap-2 sm:grid-cols-[220px_auto] items-center">
                 <Input
                   type="datetime-local"
                   value={editRemindAt}
@@ -774,7 +767,7 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
                 </div>
               </div>
             </div>
-            ) : (
+          ) : (
             <div id={`task-title-${task.id}`} className={`${baseTitleClass} break-words`} title={task.name}>
               {task.name}
             </div>
@@ -808,7 +801,10 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
             <button
               type="button"
               className="h-8 w-8 inline-flex items-center justify-center rounded text-red-400 hover:bg-red-400/10 hover:text-red-400 focus-visible:ring-2 focus-visible:ring-red-400/40 shrink-0"
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
               aria-label="タスクを削除"
             >
               <X className="h-4 w-4" aria-hidden="true" />
@@ -817,10 +813,10 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
         </div>
       </div>
       {hasNote ? (
-        <div className="pl-10 whitespace-pre-wrap break-words text-sm text-muted-foreground/90">{noteText}</div>
+        <div className="pl-10 text-sm text-muted-foreground/90 whitespace-pre-wrap break-words">{noteText}</div>
       ) : null}
       {!isEditing && secondaryLabel ? (
-        <div className={`pl-10 text-xs truncate ${isOverdue ? "text-destructive" : "text-muted-foreground"}`}>{secondaryLabel}</div>
+        <div className={`pl-10 text-xs ${isOverdue ? "text-destructive" : "text-muted-foreground"}`}>{secondaryLabel}</div>
       ) : null}
     </div>
   );
