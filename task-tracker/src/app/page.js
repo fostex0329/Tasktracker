@@ -4,7 +4,7 @@
 // =============================
 // Imports
 // =============================
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, useLayoutEffect } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,6 +77,38 @@ function groupByDate(items) {
     map.get(key).push(t);
   }
   return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+function autoResizeTextArea(element) {
+  if (!element) return;
+  element.style.height = "auto";
+  element.style.height = `${element.scrollHeight}px`;
+}
+
+function buildSampleTodos() {
+  const today = new Date();
+  const sampleToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 10, 0, 0, 0);
+  return [
+    {
+      id: "sample-inbox-1",
+      name: "Sample: Capture a quick idea",
+      completed: false,
+      note: "Try adding anything that pops into your head.",
+    },
+    {
+      id: "sample-inbox-2",
+      name: "Sample: Brain dump study tasks",
+      completed: false,
+    },
+    {
+      id: "sample-today-1",
+      name: "Sample: Review today's focus",
+      completed: false,
+      remindAt: sampleToday.toISOString(),
+      remindHasTime: true,
+      note: "Tap the pencil to edit or set a different time.",
+    },
+  ];
 }
 
 // ---- Timezone-safe helpers ----
@@ -157,6 +189,12 @@ export default function Home() {
   );
   const todoNameRef = useRef(null);
   const noteRef = useRef(null);
+
+  useLayoutEffect(() => {
+    if (noteRef.current) {
+      autoResizeTextArea(noteRef.current);
+    }
+  }, []);
   const reminderControllerRef = useRef(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState("");
@@ -179,6 +217,11 @@ export default function Home() {
     return { total, completed, remaining, rate };
   }, [todos]);
 
+  const updateTodosRef = useRef(updateTodos);
+  useEffect(() => {
+    updateTodosRef.current = updateTodos;
+  }, [updateTodos]);
+
   const drafts = useMemo(() => todos.filter((t) => !t.remindAt), [todos]);
   const scheduled = useMemo(() => todos.filter((t) => !!t.remindAt), [todos]);
   const scheduledByMonth = useMemo(() => groupByMonth(scheduled), [scheduled]);
@@ -199,21 +242,35 @@ export default function Home() {
   }, [scheduledByMonth, essentialDateKeys]);
 
   useEffect(() => {
+    let initialized = false;
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         const migrated = migrateTodosToISO(parsed);
-        updateTodos(migrated);
+        if (Array.isArray(migrated) && migrated.length > 0) {
+          updateTodosRef.current(migrated);
+          initialized = true;
+        }
         if (JSON.stringify(parsed) !== JSON.stringify(migrated)) {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
         }
       }
     } catch (err) {
       console.error("ローカルストレージからの読み込みに失敗しました:", err);
-    } finally {
-      setIsLoading(false);
     }
+
+    if (!initialized) {
+      const samples = buildSampleTodos();
+      updateTodosRef.current(samples);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(samples));
+      } catch (error) {
+        console.error("サンプルタスクの保存に失敗しました:", error);
+      }
+    }
+
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -310,6 +367,9 @@ export default function Home() {
     setSelectedDate(null);
     setSelectedTime("");
     setIsDatePickerOpen(false);
+    if (noteRef.current) {
+      requestAnimationFrame(() => autoResizeTextArea(noteRef.current));
+    }
   };
 
   const handleAddTodo = async () => {
@@ -363,7 +423,10 @@ export default function Home() {
       }
       updateTodos((prev) => [...prev, annotatedTask]);
       if (todoNameRef.current) todoNameRef.current.value = "";
-      if (noteRef.current) noteRef.current.value = "";
+      if (noteRef.current) {
+        noteRef.current.value = "";
+        autoResizeTextArea(noteRef.current);
+      }
       resetScheduleInputs();
     } catch (error) {
       console.error("タスクの追加に失敗しました:", error);
@@ -433,7 +496,7 @@ export default function Home() {
                     <TaskRow
                       task={t}
                       onToggle={() => toggleTodo(t.id)}
-                      onEdit={() => handleEditTodo(t.id, {})}
+                      onEdit={(payload) => handleEditTodo(t.id, payload)}
                       onDelete={() => handleDeleteTodo(t.id)}
                     />
                   </li>
@@ -481,7 +544,7 @@ export default function Home() {
                                 <TaskRow
                                   task={t}
                                   onToggle={() => toggleTodo(t.id)}
-                                  onEdit={() => handleEditTodo(t.id, {})}
+                                  onEdit={(payload) => handleEditTodo(t.id, payload)}
                                   onDelete={() => handleDeleteTodo(t.id)}
                                 />
                               </div>
@@ -551,9 +614,11 @@ export default function Home() {
                         ref={noteRef}
                         placeholder={`メモ（任意・最大${NOTE_MAX_LENGTH}文字）`}
                         maxLength={NOTE_MAX_LENGTH}
-                        className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background min-h-[64px]"
+                        className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background min-h-[64px]"
+                        style={{ overflow: "hidden", resize: "none" }}
+                        onInput={(e) => autoResizeTextArea(e.currentTarget)}
                       />
-                      <span className="text-xs text-muted-foreground">最大 {NOTE_MAX_LENGTH} 文字まで入力できます</span>
+                      <span className="text-xs text-muted-foreground px-3">最大 {NOTE_MAX_LENGTH} 文字まで入力できます</span>
                     </div>
                   </div>
                   <div className="grid gap-3 min-w-0 sm:grid-cols-[minmax(0,1fr)_160px] lg:grid-cols-[minmax(0,1fr)_200px]">
@@ -662,38 +727,173 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
   const noteText = typeof task.note === "string" ? task.note.trim() : "";
   const hasNote = noteText.length > 0;
 
+  const rowRef = useRef(null);
+  const editNameRef = useRef(null);
+  const editNoteRef = useRef(null);
+  const baseReminderDate = useMemo(() => {
+    if (!task.remindAt) return null;
+    const parsed = parseISO(task.remindAt);
+    if (!isValidDate(parsed)) return null;
+    return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  }, [task.remindAt]);
+  const baseReminderTime = useMemo(() => {
+    if (!hasRemind || !hasExplicitTime) return "";
+    return formatTime(task.remindAt) || "";
+  }, [hasRemind, hasExplicitTime, task.remindAt]);
+
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(task.name || "");
-  const baseRemindValue =
-    task.remindAt && task.remindHasTime !== false ? isoToLocalDatetime(task.remindAt) : "";
-  const [editRemindAt, setEditRemindAt] = useState(baseRemindValue);
+  const [editDate, setEditDate] = useState(baseReminderDate);
+  const [editTime, setEditTime] = useState(baseReminderTime);
   const [editNote, setEditNote] = useState(task.note || "");
+  const [isEditDateOpen, setIsEditDateOpen] = useState(false);
+
+  const resetEditState = useCallback(() => {
+    setEditName(task.name || "");
+    setEditNote(task.note || "");
+    setEditDate(baseReminderDate ? new Date(baseReminderDate) : null);
+    setEditTime(baseReminderTime || "");
+    setIsEditDateOpen(false);
+    requestAnimationFrame(() => {
+      if (editNoteRef.current) {
+        autoResizeTextArea(editNoteRef.current);
+      }
+    });
+  }, [task.name, task.note, baseReminderDate, baseReminderTime]);
+
+  const cancelEdit = useCallback(() => {
+    setIsEditing(false);
+    resetEditState();
+  }, [resetEditState]);
+
+  const ensureEditTimeDefault = useCallback(() => {
+    if (!editDate) return;
+    setEditTime((prev) => {
+      const value = typeof prev === "string" ? prev.trim() : "";
+      if (value.length > 0) return prev;
+      return getNearestFutureTime(5);
+    });
+  }, [editDate]);
+
+  const clearEditSchedule = useCallback(() => {
+    setEditDate(null);
+    setEditTime("");
+    setIsEditDateOpen(false);
+  }, []);
 
   const submitEdit = async () => {
-    if (!onEdit) { setIsEditing(false); return; }
-    const payload = {};
-    if (editName !== task.name) payload.name = editName.trim();
-    const baseline = baseRemindValue;
-    if (editRemindAt !== baseline) {
-      payload.remindAt = editRemindAt ? localDatetimeToISO(editRemindAt) : null;
-      payload.remindHasTime = Boolean(editRemindAt);
+    if (!onEdit) {
+      cancelEdit();
+      return;
     }
+
+    const trimmedName = editName.trim();
+    if (!trimmedName) {
+      alert("タスク名を入力してください");
+      return;
+    }
+
     const trimmedNote = editNote.trim();
     if (trimmedNote.length > NOTE_MAX_LENGTH) {
       alert(`メモは${NOTE_MAX_LENGTH}文字以内で入力してください`);
       return;
     }
+
+    const payload = {};
+    if (trimmedName !== task.name) {
+      payload.name = trimmedName;
+    }
+
+    const baselineISO = task.remindAt || null;
+    const dateValue = editDate instanceof Date && !Number.isNaN(editDate?.getTime()) ? editDate : null;
+    const timeValue = typeof editTime === "string" ? editTime.trim() : "";
+
+    let nextISO = baselineISO;
+    let nextHasTime = hasExplicitTime;
+
+    if (dateValue) {
+      const localDatePart = formatISODate(dateValue);
+      const timePart = timeValue || "00:00";
+      const iso = localDatetimeToISO(`${localDatePart}T${timePart}`);
+      if (!iso) {
+        alert("日付または時刻が無効です");
+        return;
+      }
+      nextISO = iso;
+      nextHasTime = Boolean(timeValue);
+    } else {
+      nextISO = null;
+      nextHasTime = false;
+    }
+
+    if (nextISO !== baselineISO) {
+      payload.remindAt = nextISO;
+    }
+    if (nextHasTime !== hasExplicitTime) {
+      payload.remindHasTime = nextHasTime;
+    }
+
     const originalNote = task.note || "";
     if (trimmedNote !== originalNote) {
       payload.note = trimmedNote.length > 0 ? trimmedNote : null;
     }
+
+    if (Object.keys(payload).length === 0) {
+      cancelEdit();
+      return;
+    }
+
     const ok = await onEdit(payload);
-    if (ok) setIsEditing(false);
+    if (ok) {
+      setIsEditing(false);
+      setIsEditDateOpen(false);
+    }
   };
+
+  useEffect(() => {
+    if (isEditing) return;
+    resetEditState();
+  }, [isEditing, resetEditState]);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    const handlePointerDown = (event) => {
+      const target = event.target;
+      if (rowRef.current?.contains(target)) return;
+      if (target.closest(`[data-edit-popover="${task.id}"]`)) return;
+      if (target.closest(".MuiPickersPopper-root")) return;
+      cancelEdit();
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isEditing, cancelEdit, task.id]);
+
+  useLayoutEffect(() => {
+    if (!isEditing) return;
+    if (editNameRef.current) {
+      editNameRef.current.focus({ preventScroll: true });
+    }
+    if (editNoteRef.current) {
+      autoResizeTextArea(editNoteRef.current);
+    }
+  }, [isEditing, editNote]);
+
+  useEffect(() => {
+    const handleExternalEdit = (event) => {
+      if (!event?.detail || event.detail.id !== task.id) return;
+      resetEditState();
+      setIsEditing(true);
+      requestAnimationFrame(() => {
+        rowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    };
+    window.addEventListener("task-edit-request", handleExternalEdit);
+    return () => window.removeEventListener("task-edit-request", handleExternalEdit);
+  }, [task.id, resetEditState]);
 
   const iconClassName = cn(
     "h-5 w-5 shrink-0",
-    completed ? "text-emerald-600" : isOverdue ? "text-destructive" : "text-foreground"
+    completed ? "text-emerald-600" : isOverdue ? "text-destructive" : "text-foreground/80"
   );
 
   const baseTitleClass = `text-[15px] ${
@@ -704,12 +904,28 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
 
   return (
     <div
+      ref={rowRef}
       role="checkbox"
       aria-checked={completed}
       aria-labelledby={`task-title-${task.id}`}
       tabIndex={0}
-      onClick={onToggle}
+      onClick={(e) => {
+        if (isEditing) {
+          e.preventDefault();
+          e.stopPropagation();
+          cancelEdit();
+          return;
+        }
+        onToggle?.();
+      }}
       onKeyDown={(e) => {
+        if (isEditing) {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            cancelEdit();
+          }
+          return;
+        }
         if (e.key === " " || e.key === "Enter") {
           e.preventDefault();
           onToggle?.();
@@ -717,51 +933,114 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
       }}
       className="group flex w-full max-w-full cursor-pointer select-none flex-col gap-1 overflow-hidden rounded-md px-3 py-2 transition-colors hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
-      <div className="flex w-full items-center gap-2">
+      <div className="flex w-full items-start gap-2">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center">
           {completed ? (
-            <CheckCircle aria-hidden="true" className={iconClassName} strokeWidth={2} />
+            <CheckCircle aria-hidden="true" className={iconClassName} strokeWidth={1.6} />
           ) : (
-            <Circle aria-hidden="true" className={iconClassName} strokeWidth={2} />
+            <Circle aria-hidden="true" className={iconClassName} strokeWidth={1.6} />
           )}
         </div>
         <div className="min-w-0 flex-1">
           {isEditing ? (
-            <div className="grid gap-3">
+            <div className="grid gap-3" onClick={(e) => e.stopPropagation()}>
               <Input
+                ref={editNameRef}
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 placeholder="タスク名"
-                className="h-8"
-                onClick={(e) => e.stopPropagation()}
+                className="h-9"
               />
               <textarea
+                ref={editNoteRef}
                 value={editNote}
                 onChange={(e) => setEditNote(e.target.value)}
                 maxLength={NOTE_MAX_LENGTH}
                 placeholder={`メモ（任意・最大${NOTE_MAX_LENGTH}文字）`}
-                className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background min-h-[64px]"
-                onClick={(e) => e.stopPropagation()}
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background min-h-[64px]"
+                style={{ overflow: "hidden", resize: "none" }}
+                onInput={(e) => autoResizeTextArea(e.currentTarget)}
               />
-              <div className="grid gap-2 sm:grid-cols-[220px_auto] items-center">
-                <Input
-                  type="datetime-local"
-                  value={editRemindAt}
-                  onChange={(e) => setEditRemindAt(e.target.value)}
-                  className="h-8"
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <div className="flex items-center gap-2">
-                  <Button size="sm" onClick={(e) => { e.stopPropagation(); submitEdit(); }}>保存</Button>
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Popover open={isEditDateOpen} onOpenChange={(open) => setIsEditDateOpen(open)}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                          "h-9 min-w-[11rem] justify-start text-left font-normal",
+                          !editDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {editDate ? formatReadableDateLabel(editDate) : "日付を選択"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-auto p-0"
+                      align="start"
+                      data-edit-popover={task.id}
+                    >
+                      <Calendar
+                        mode="single"
+                        selected={editDate ?? undefined}
+                        onSelect={(date) => {
+                          if (!date) {
+                            clearEditSchedule();
+                            return;
+                          }
+                          const normalized = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                          setEditDate(normalized);
+                          setIsEditDateOpen(false);
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <div className="w-[9rem]">
+                    <TimePickerField
+                      value={editTime}
+                      onChange={setEditTime}
+                      disabled={!editDate}
+                      onFocus={ensureEditTimeDefault}
+                      onOpen={ensureEditTimeDefault}
+                      className="h-10"
+                      placeholder="時刻を選択"
+                      minutesStep={5}
+                    />
+                  </div>
                   <Button
+                    type="button"
                     size="sm"
                     variant="ghost"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setIsEditing(false);
-                      setEditName(task.name || "");
-                      setEditRemindAt(baseRemindValue);
-                      setEditNote(task.note || "");
+                      clearEditSchedule();
+                    }}
+                    disabled={!editDate && !(editTime && editTime.trim())}
+                  >
+                    日付をクリア
+                  </Button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      submitEdit();
+                    }}
+                  >
+                    保存
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      cancelEdit();
                     }}
                   >
                     キャンセル
@@ -789,10 +1068,8 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
               className="h-8 w-8 inline-flex items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground shrink-0"
               onClick={(e) => {
                 e.stopPropagation();
+                resetEditState();
                 setIsEditing(true);
-                setEditName(task.name || "");
-                setEditRemindAt(baseRemindValue);
-                setEditNote(task.note || "");
               }}
               aria-label="タスクを編集"
             >
@@ -814,7 +1091,7 @@ function TaskRowWithDate({ task, onToggle, onDelete, onEdit }) {
           ) : null}
         </div>
       </div>
-      {hasNote ? (
+      {!isEditing && hasNote ? (
         <div className="pl-10 text-sm text-muted-foreground/90 whitespace-pre-wrap break-words">{noteText}</div>
       ) : null}
       {!isEditing && secondaryLabel ? (
