@@ -5,6 +5,7 @@
 // Imports
 // =============================
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -18,6 +19,7 @@ import { CheckCircle, Circle, Pencil, X, CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getNotificationPermission, requestNotificationPermission as reqNotifPerm, scheduleTaskReminders } from "@/lib/notification";
 import { sortTodos } from "@/lib/sort-todos";
+import iconLogo from "@/app/icon-logo.svg";
 
 // =============================
 // Constants
@@ -403,8 +405,8 @@ export default function Home() {
     <div className="min-h-dvh bg-background text-foreground">
       {/* Header */}
       <header className="sticky top-0 z-10 border-b bg-card/60 backdrop-blur">
-        <div className="mx-auto max-w-[1200px] px-4 sm:px-6 h-16 flex items-center justify-between min-w-0">
-          <h1 className="text-lg sm:text-xl font-semibold tracking-tight truncate">YOHAKU</h1>
+        <div className="mx-auto max-w-[1200px] pl-10 pr-4 sm:pl-12 sm:pr-6 h-16 flex items-center justify-between min-w-0">
+          <Image src={iconLogo} alt="YOHAKU" priority className="h-9 w-auto" />
           <div className="flex items-center gap-1 sm:gap-2 min-w-0">
             <Button size="sm" onClick={() => todoNameRef.current?.focus()} className="hidden sm:inline-flex">新規タスク</Button>
             <Button size="sm" variant="outline" onClick={handleClear} className="text-xs sm:text-sm">完了削除</Button>
