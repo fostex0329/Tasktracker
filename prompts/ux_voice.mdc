@@ -1,0 +1,12 @@
+---
+tone: "静か・やさしい・押し付けない"
+microcopy:
+  capture_placeholder_en: "Place it here. Your mind can rest."
+  capture_placeholder_es: "Déjalo aquí. Tu mente puede descansar."
+  empty_state_en: "Space to breathe. Add what matters now."
+  empty_state_es: "Espacio para respirar. Agrega lo que importa ahora."
+rules:
+  - "感嘆符・絵文字は基本使わない"
+  - "文は短く言い切る"
+  - "負担を促す文言は禁止（“全部入力”など）"
+---
