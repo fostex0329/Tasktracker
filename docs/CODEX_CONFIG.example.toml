@@ -1,0 +1,28 @@
+profile = "default"
+
+[profiles.default]
+model = "gpt-5-codex"
+model_provider = "openai"
+model_reasoning_effort = "medium"
+model_max_output_tokens = 2500
+confirm_shell_commands = true
+confirm_file_edits = true
+
+[profiles.review]
+model = "gpt-5-codex"
+model_reasoning_effort = "high"
+model_max_output_tokens = 1800
+
+[profiles.fast]
+model = "gpt-5-codex"
+model_reasoning_effort = "low"
+model_max_output_tokens = 900
+
+[model_providers.openai]
+env_key = "OPENAI_API_KEY"
+
+[shell_environment_policy]
+inherit_editor_env = true
+
+[guardrails]
+deny_patterns = ["rm -rf /","printenv .*KEY","curl .*secret.*"]

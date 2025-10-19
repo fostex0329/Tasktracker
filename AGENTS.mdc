@@ -1,0 +1,32 @@
+---
+project: "YOHAKU / Tasktracker"
+purpose: "Capture→Clarify→Doで頭の雑音を下げ、考える余白をつくる"
+users:
+  - "忙しいナレッジワーカー/学生/個人開発者"
+  - "北米の英語“非”ネイティブ（特にスペイン語話者）"
+stack:
+  - "Next.js + React / JavaScript"
+  - "Tailwind + Radix UI（MUI併存。将来どちらかに寄せる方針検討中）"
+  - "react-hook-form + zod"
+  - "dayjs, react-day-picker"
+scripts:
+  dev: "next dev --turbopack"
+  build: "next build"
+  start: "next start"
+  lint: "next lint"
+constraints:
+  - ".env 以外で機密を扱わない（画面/ログ/PRに出さない）"
+  - "新規依存はPRで理由必須（サイズ/ライセンス/一貫性）"
+  - "UIは“静けさ・余白・抑制”。点滅/重いアニメは不可"
+anti_goals:
+  - "UIライブラリの混在拡大（RadixとMUIの無秩序併用を増やさない）"
+  - "1画面に情報を詰め込みすぎる"
+review_checklist:
+  - "Captureがワンタップ/Enterで気持ちよく預けられるか"
+  - "Clarifyで“今日の3つ”に自然収束する導線か"
+  - "zodで入出力の型境界チェックが通っているか"
+---
+# 実装ルール（短版）
+- フォーム/APIは zod で **入口/出口** 両方検証
+- キーボード優先（Enter=保存 / Esc=閉じる）。A11y（aria/コントラストAA+）
+- 文言は定数化（後の i18n で辞書化しやすく）
